@@ -111,26 +111,55 @@ watch(normalizedQuery, () => {
           <span class="text-center text-sm font-light text-slate-400" aria-hidden="true">{{ openChapterId === chapter.id ? '−' : '+' }}</span>
         </button>
 
-        <ul
-          v-if="openChapterId === chapter.id"
-          class="m-0 list-none px-1.5 pb-2 pt-1"
+        <div
+          class="chapter-sections"
+          :class="openChapterId === chapter.id ? 'is-open' : ''"
+          :aria-hidden="openChapterId === chapter.id ? undefined : 'true'"
         >
-          <li v-for="section in chapter.sections" :key="section.id">
-            <button
-              type="button"
-              class="block w-full rounded-[4px] py-2 pl-[46px] pr-3 text-left text-[15px] leading-6 tracking-[-.012em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#12327f]"
-              :class="section.id === activeSectionId
-                ? 'bg-[#e6eefb] font-semibold text-[#12327f]'
-                : 'font-normal text-slate-600 hover:bg-[#f2f5f9] hover:text-[#071225]'"
-              :aria-current="section.id === activeSectionId ? 'page' : undefined"
-              @click="emit('selectSection', section.id)"
-            >
-              {{ section.title }}
-            </button>
-          </li>
-        </ul>
+          <ul class="chapter-sections-inner m-0 list-none px-1.5 pb-2 pt-1">
+            <li v-for="section in chapter.sections" :key="section.id">
+              <button
+                type="button"
+                class="block w-full rounded-[4px] py-2 pl-[46px] pr-3 text-left text-[15px] leading-6 tracking-[-.012em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#12327f]"
+                :class="section.id === activeSectionId
+                  ? 'bg-[#e6eefb] font-semibold text-[#12327f]'
+                  : 'font-normal text-slate-600 hover:bg-[#f2f5f9] hover:text-[#071225]'"
+                :aria-current="section.id === activeSectionId ? 'page' : undefined"
+                @click="emit('selectSection', section.id)"
+              >
+                {{ section.title }}
+              </button>
+            </li>
+          </ul>
+        </div>
       </li>
     </ol>
     <p v-if="!visibleChapters.length" class="px-3 py-8 text-sm text-slate-400">没有匹配的章节或知识点。</p>
   </nav>
 </template>
+
+<style scoped>
+/* 章节折叠：用 grid 行高过渡实现平滑展开/收起 */
+.chapter-sections {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.32s ease,
+    opacity 0.28s ease,
+    visibility 0s linear 0.32s;
+}
+
+.chapter-sections.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.chapter-sections-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+</style>

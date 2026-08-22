@@ -17,6 +17,19 @@ type SectionArticleEntry = {
   examLinks: ExamKnowledgeLink[]
 }
 
+type SearchSuggestion = {
+  kind: 'chapter' | 'section' | 'point'
+  id: string
+  title: string
+  context: string
+  sectionId: string
+}
+
+type SearchPanelItem =
+  | { type: 'search'; term: string }
+  | { type: 'history'; term: string }
+  | { type: 'suggestion'; suggestion: SearchSuggestion }
+
 const route = useRoute()
 const router = useRouter()
 const book = ref<Book>()
@@ -30,14 +43,206 @@ const leftPinned = ref(false)
 const rightPinned = ref(false)
 const compactLayout = ref(false)
 const sidebarQuery = ref('')
-// 回车跳转到搜索页并展示该关键词的搜索结果
-function onSearchKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Enter') return
-  e.preventDefault()
-  const q = sidebarQuery.value.trim()
+const searchFocused = ref(false)
+const highlightIndex = ref(-1)
+const bookMenuOpen = ref(false)
+const bookMenuRef = ref<HTMLElement | null>(null)
+const searchBoxRef = ref<HTMLElement | null>(null)
+
+// ===== 搜索历史：localStorage 持久化，最近搜索排前面 =====
+const SEARCH_HISTORY_KEY = 'knowledge-sidebar-search-history:v1'
+const MAX_SEARCH_HISTORY = 8
+
+function loadSearchHistory(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(SEARCH_HISTORY_KEY) || '[]')
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string').slice(0, MAX_SEARCH_HISTORY)
+      : []
+  } catch {
+    return []
+  }
+}
+
+const searchHistory = ref<string[]>(loadSearchHistory())
+
+function saveSearchHistory() {
+  try {
+    window.localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory.value))
+  } catch {
+    // 私有模式或受限环境下 localStorage 不可用，忽略即可
+  }
+}
+
+function recordSearch(term: string) {
+  const q = term.trim()
   if (!q) return
+  searchHistory.value = [q, ...searchHistory.value.filter((item) => item !== q)].slice(0, MAX_SEARCH_HISTORY)
+  saveSearchHistory()
+}
+
+function clearSearchHistory() {
+  searchHistory.value = []
+  saveSearchHistory()
+}
+
+const currentBookTitle = computed(() => books.find((item) => item.id === bookId.value)?.title || '')
+
+/** 输入时按当前教材的 章 / 节 / 知识点 标题做百度式匹配 */
+const searchSuggestions = computed<SearchSuggestion[]>(() => {
+  const q = sidebarQuery.value.trim().toLowerCase()
+  if (!q || !book.value) return []
+  const result: SearchSuggestion[] = []
+  for (const chapter of book.value.chapters) {
+    if (chapter.title.toLowerCase().includes(q)) {
+      result.push({
+        kind: 'chapter',
+        id: chapter.id,
+        title: chapter.title,
+        context: '',
+        sectionId: chapter.sections[0]?.id || '',
+      })
+    }
+    for (const sectionItem of chapter.sections) {
+      if (sectionItem.title.toLowerCase().includes(q)) {
+        result.push({
+          kind: 'section',
+          id: sectionItem.id,
+          title: sectionItem.title,
+          context: chapter.title,
+          sectionId: sectionItem.id,
+        })
+      }
+      for (const point of sectionItem.points) {
+        if (point.title.toLowerCase().includes(q)) {
+          result.push({
+            kind: 'point',
+            id: point.id,
+            title: point.title,
+            context: `${chapter.title} / ${sectionItem.title}`,
+            sectionId: sectionItem.id,
+          })
+        }
+      }
+    }
+  }
+  return result.slice(0, 8)
+})
+
+/** 搜索面板内容：空输入时展示历史，输入时展示「搜索 xxx」+ 知识匹配 */
+const searchPanelItems = computed<SearchPanelItem[]>(() => {
+  const q = sidebarQuery.value.trim()
+  if (!q) {
+    return searchHistory.value
+      .slice(0, MAX_SEARCH_HISTORY)
+      .map((term): SearchPanelItem => ({ type: 'history', term }))
+  }
+  return [
+    { type: 'search', term: q } as SearchPanelItem,
+    ...searchSuggestions.value.map((suggestion): SearchPanelItem => ({ type: 'suggestion', suggestion })),
+  ]
+})
+
+const searchPanelVisible = computed(() => searchFocused.value && searchPanelItems.value.length > 0)
+
+function openSearchPage(term: string) {
+  const q = term.trim()
+  if (!q) return
+  recordSearch(q)
+  searchFocused.value = false
+  highlightIndex.value = -1
   router.push({ name: 'search', query: { q } })
 }
+
+function selectSearchSuggestion(suggestion: SearchSuggestion) {
+  if (!suggestion.sectionId) return
+  recordSearch(sidebarQuery.value)
+  searchFocused.value = false
+  highlightIndex.value = -1
+  selectSection(suggestion.sectionId)
+}
+
+function handleSearchPanelClick(item: SearchPanelItem) {
+  if (item.type === 'suggestion') {
+    selectSearchSuggestion(item.suggestion)
+  } else {
+    openSearchPage(item.term)
+  }
+}
+
+function searchPanelKindLabel(item: SearchPanelItem) {
+  if (item.type === 'search') return '搜索'
+  if (item.type === 'history') return '历史'
+  if (item.suggestion.kind === 'chapter') return '章'
+  if (item.suggestion.kind === 'section') return '节'
+  return '点'
+}
+
+function searchPanelLabel(item: SearchPanelItem) {
+  return item.type === 'suggestion' ? item.suggestion.title : item.term
+}
+
+function searchPanelItemKey(item: SearchPanelItem) {
+  return item.type === 'suggestion'
+    ? `suggestion:${item.suggestion.id}`
+    : `${item.type}:${item.term}`
+}
+
+function onSearchFocusout(e: FocusEvent) {
+  const next = e.relatedTarget
+  const box = searchBoxRef.value
+  if (next instanceof Node && box?.contains(next)) return
+  searchFocused.value = false
+  highlightIndex.value = -1
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  const items = searchPanelItems.value
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const highlighted = highlightIndex.value >= 0 ? items[highlightIndex.value] : undefined
+    if (highlighted?.type === 'suggestion') {
+      selectSearchSuggestion(highlighted.suggestion)
+    } else if (highlighted) {
+      openSearchPage(highlighted.term)
+    } else {
+      openSearchPage(sidebarQuery.value)
+    }
+    return
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    searchFocused.value = false
+    highlightIndex.value = -1
+    return
+  }
+  if (!items.length) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    highlightIndex.value = highlightIndex.value >= items.length - 1 ? 0 : highlightIndex.value + 1
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    highlightIndex.value = highlightIndex.value <= 0 ? items.length - 1 : highlightIndex.value - 1
+  }
+}
+
+function toggleBookMenu() {
+  bookMenuOpen.value = !bookMenuOpen.value
+}
+
+function chooseBook(id: string) {
+  bookMenuOpen.value = false
+  if (id !== bookId.value) selectBook(id)
+}
+
+function onBookMenuFocusout(e: FocusEvent) {
+  const next = e.relatedTarget
+  const box = bookMenuRef.value
+  if (next instanceof Node && box?.contains(next)) return
+  bookMenuOpen.value = false
+}
+
 const LEFT_DRAWER_WIDTH = 304
 const RIGHT_DRAWER_WIDTH = 270
 // 有搜索内容时也保持侧栏展开，避免失焦后侧栏收回
@@ -48,6 +253,15 @@ const leftOpen = computed(() => compactLayout.value
 const rightOpen = computed(() => compactLayout.value
   ? rightPinned.value
   : (rightPinned.value || rightHovered.value))
+
+// 侧栏收起时同步收起搜索建议与书籍菜单，避免残留不可见但仍聚焦的弹层
+watch(leftOpen, (open) => {
+  if (!open) {
+    searchFocused.value = false
+    highlightIndex.value = -1
+    bookMenuOpen.value = false
+  }
+})
 
 /** 移动端点击遮罩关闭所有边栏 */
 function closeMobileDrawers() {
@@ -296,7 +510,7 @@ onBeforeUnmount(() => {
             </svg>
           </button>
         </div>
-        <label class="relative mb-5 block">
+        <div ref="searchBoxRef" class="relative mb-5 block" @focusout="onSearchFocusout">
           <span class="sr-only">搜索知识目录</span>
           <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
           <input
@@ -306,21 +520,73 @@ onBeforeUnmount(() => {
             placeholder="搜索知识点（回车前往搜索页）"
             autocomplete="off"
             spellcheck="false"
+            @focus="searchFocused = true"
+            @input="highlightIndex = -1"
             @keydown="onSearchKeydown"
           />
-        </label>
+          <div v-if="searchPanelVisible" class="search-panel" role="listbox" aria-label="搜索建议">
+            <div v-if="!sidebarQuery.trim()" class="search-panel-head">
+              <span>搜索历史</span>
+              <button type="button" class="search-panel-clear" @click="clearSearchHistory">清空</button>
+            </div>
+            <ul class="m-0 list-none p-1">
+              <li
+                v-for="(item, index) in searchPanelItems"
+                :key="searchPanelItemKey(item)"
+                role="option"
+                :aria-selected="highlightIndex === index"
+              >
+                <button
+                  type="button"
+                  class="search-panel-item"
+                  :class="highlightIndex === index ? 'is-highlighted' : ''"
+                  @mousedown.prevent
+                  @click="handleSearchPanelClick(item)"
+                >
+                  <span class="search-panel-kind" aria-hidden="true">{{ searchPanelKindLabel(item) }}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate">{{ searchPanelLabel(item) }}</span>
+                    <span
+                      v-if="item.type === 'suggestion' && item.suggestion.context"
+                      class="block truncate text-[11px] text-[#93a0b4]"
+                    >{{ item.suggestion.context }}</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
         <p class="mb-2 mt-0 text-[11px] font-semibold tracking-[.08em] text-slate-500">选择书籍</p>
-        <label class="group relative block min-w-0 cursor-pointer">
-          <select
-            class="w-full cursor-pointer appearance-none truncate border-0 bg-transparent py-0 pr-7 text-[20px] font-semibold tracking-[-.03em] text-[#071225] outline-none"
-            :value="bookId"
-            aria-label="选择教材"
-            @change="selectBook(($event.target as HTMLSelectElement).value)"
+        <div ref="bookMenuRef" class="relative min-w-0" @focusout="onBookMenuFocusout">
+          <button
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent py-0 pl-0 pr-7 text-left text-[20px] font-semibold tracking-[-.03em] text-[#071225] outline-none"
+            aria-haspopup="listbox"
+            :aria-expanded="bookMenuOpen"
+            @click="toggleBookMenu"
           >
-            <option v-for="bookItem in books" :key="bookItem.id" :value="bookItem.id">{{ bookItem.title }}</option>
-          </select>
-          <span class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-xs text-slate-400">⌄</span>
-        </label>
+            <span class="min-w-0 flex-1 truncate">{{ currentBookTitle }}</span>
+            <span
+              class="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-xs text-slate-400 transition-transform duration-200"
+              :class="bookMenuOpen ? 'rotate-180' : ''"
+              aria-hidden="true"
+            >⌄</span>
+          </button>
+          <div class="book-menu" :class="bookMenuOpen ? 'is-open' : ''" role="listbox" aria-label="选择教材">
+            <ul class="book-menu-inner m-0 list-none">
+              <li v-for="item in books" :key="item.id" role="option" :aria-selected="item.id === bookId">
+                <button
+                  type="button"
+                  class="block w-full px-3 py-2 text-left text-sm transition-colors"
+                  :class="item.id === bookId
+                    ? 'bg-[#e6eefb] font-semibold text-[#12327f]'
+                    : 'text-slate-600 hover:bg-[#f2f5f9] hover:text-[#071225]'"
+                  @click="chooseBook(item.id)"
+                >{{ item.title }}</button>
+              </li>
+            </ul>
+          </div>
+        </div>
       </header>
       <KnowledgeSidebar
         v-if="book"
@@ -328,6 +594,7 @@ onBeforeUnmount(() => {
         :chapters="book.chapters"
         :active-section-id="activeSectionId"
         :open="leftOpen"
+        :query="sidebarQuery"
         @select-section="selectSection"
       />
       <div v-else class="px-5 py-10 text-sm text-slate-500">正在建立知识目录…</div>
@@ -400,3 +667,105 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 书籍下拉：grid 行高过渡实现逐渐展开/收起 */
+.book-menu {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.35s ease,
+    opacity 0.3s ease,
+    visibility 0s linear 0.35s;
+}
+
+.book-menu.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.book-menu-inner {
+  min-height: 0;
+  overflow: hidden;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #d8e0eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+/* 搜索建议面板 */
+.search-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  overflow: hidden;
+  border: 1px solid #d8e0eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16);
+}
+
+.search-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #8a97ad;
+}
+
+.search-panel-clear {
+  font-size: 12px;
+  font-weight: 600;
+  color: #31559e;
+}
+
+.search-panel-clear:hover {
+  color: #12327f;
+}
+
+.search-panel-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+  color: #33415c;
+  transition: background-color 0.12s ease;
+}
+
+.search-panel-item.is-highlighted {
+  background: #eef3fb;
+  color: #0f1f3d;
+}
+
+.search-panel-kind {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef2f8;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  color: #64748b;
+}
+
+.search-panel-item.is-highlighted .search-panel-kind {
+  background: #dbe7fb;
+  color: #31559e;
+}
+</style>
