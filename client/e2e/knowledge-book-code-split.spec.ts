@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from './fixtures'
 
 /**
  * 知识页按 book 拆包验证：

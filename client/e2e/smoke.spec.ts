@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from './fixtures'
 
 /**
  * 全站冒烟：依次访问首页/知识/真题/搜索四页，

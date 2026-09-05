@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from './fixtures'
 
 /**
  * 真题筛选抽屉交互：悬停展开、勾选年份+题型、应用后 URL 反映 query。

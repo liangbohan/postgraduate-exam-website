@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from './fixtures'
 
 /**
  * 搜索页：输入关键词出结果、命中文本含 <mark> 高亮。

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import AppFooter from '@/components/AppFooter.vue'
+import BackupSiteNotice from '@/components/BackupSiteNotice.vue'
 import { isNavigating } from '@/router'
 </script>
 
 <template>
   <RouterView />
   <AppFooter />
+  <BackupSiteNotice />
 
   <!-- 路由跳转时的全屏 loading：顶部进度条 + 中央转圈 -->
   <div
