@@ -214,50 +214,46 @@ onBeforeUnmount(() => {
         class="exam-flip-card__face exam-flip-card__front"
         aria-label="题目面"
       >
-        <div
-          class="grid max-w-[1010px] grid-cols-[auto_minmax(0,1fr)] gap-x-3 md:gap-x-5 md:pr-[64px]"
-        >
-          <span class="flex min-w-0 items-center gap-2 pt-1 md:items-start">
-            <b
-              class="shrink-0 select-none font-mono text-[15px] font-semibold leading-7 tracking-[-.02em] text-[#12327f]"
-              >{{ exam.year }}.{{ exam.number }}</b
-            >
-          </span>
-          <div class="min-w-0">
-            <section aria-label="题干">
-              <ExamMarkdown :source="currentExam.stem" />
-            </section>
+        <span class="sticky top-0 bg-white flex min-w-0 items-center gap-2 pt-1">
+          <b
+            class="shrink-0 select-none font-mono text-[15px] font-semibold leading-7 tracking-[-.02em] text-[#12327f]"
+            >{{ exam.year }}.{{ exam.number }}</b
+          >
+        </span>
+        <div class="min-w-0 max-w-[1010px]">
+          <section aria-label="题干">
+            <ExamMarkdown :source="currentExam.stem" />
+          </section>
 
-            <div v-if="currentExam.options.length" class="mt-7">
-              <button
-                v-for="option in currentExam.options"
-                :key="option.key"
-                type="button"
-                class="exam-option"
-                :data-state="optionState(option.key)"
-                disabled
+          <div v-if="currentExam.options.length" class="mt-7">
+            <button
+              v-for="option in currentExam.options"
+              :key="option.key"
+              type="button"
+              class="exam-option"
+              :data-state="optionState(option.key)"
+              disabled
+            >
+              <span class="option-key" aria-hidden="true">{{
+                option.key
+              }}</span>
+              <span class="option-content"
+                ><ExamMarkdown inline :source="option.text"
+              /></span>
+              <span
+                class="option-status"
+                :aria-label="optionStatus(option.key)?.label"
               >
-                <span class="option-key" aria-hidden="true">{{
-                  option.key
-                }}</span>
-                <span class="option-content"
-                  ><ExamMarkdown inline :source="option.text"
-                /></span>
-                <span
-                  class="option-status"
-                  :aria-label="optionStatus(option.key)?.label"
-                >
-                  <template v-if="optionStatus(option.key)">
-                    <span class="status-symbol" aria-hidden="true">{{
-                      optionStatus(option.key)!.symbol
-                    }}</span>
-                    <span class="status-label">{{
-                      optionStatus(option.key)!.label
-                    }}</span>
-                  </template>
-                </span>
-              </button>
-            </div>
+                <template v-if="optionStatus(option.key)">
+                  <span class="status-symbol" aria-hidden="true">{{
+                    optionStatus(option.key)!.symbol
+                  }}</span>
+                  <span class="status-label">{{
+                    optionStatus(option.key)!.label
+                  }}</span>
+                </template>
+              </span>
+            </button>
           </div>
         </div>
       </section>
@@ -304,136 +300,130 @@ onBeforeUnmount(() => {
     :id="`exam-${exam.id}`"
     class="group relative scroll-mt-24 border-t border-[#e1e6ed] py-7 first:border-t-0 first:pt-8"
   >
-    <ExamQuestionTools
-      :open="!!menuOpen"
-      :linked-knowledge="linkedKnowledge"
-      :can-submit="canSubmit"
-      :has-answer="!!result"
-      :answer-expanded="solutionExpanded"
-      class="shrink-0 md:absolute md:right-2 md:top-8"
-      @toggle="emit('toggle-tools')"
-      @close="emit('close-tools')"
-      @reveal="revealSolution"
-      @submit="submitAnswer"
-      @toggle-answer="solutionExpanded = !solutionExpanded"
-    />
+    <span class="sticky top-0 bg-white flex justify-between min-w-0 items-center gap-2 pt-1">
+      <b
+        class="shrink-0 select-none font-mono text-[15px] font-semibold leading-7 tracking-[-.02em] text-[#12327f]"
+        >{{ exam.year }}.{{ exam.number }}</b
+      >
+      <ExamQuestionTools
+        :open="!!menuOpen"
+        :linked-knowledge="linkedKnowledge"
+        :can-submit="canSubmit"
+        :has-answer="!!result"
+        :answer-expanded="solutionExpanded"
+        class="shrink-0"
+        @toggle="emit('toggle-tools')"
+        @close="emit('close-tools')"
+        @reveal="revealSolution"
+        @submit="submitAnswer"
+        @toggle-answer="solutionExpanded = !solutionExpanded"
+      />
+    </span>
+    <div class="min-w-0 max-w-[1010px]">
+      <section aria-label="题干">
+        <ExamMarkdown :source="currentExam.stem" />
+      </section>
 
-    <div
-      class="grid max-w-[1010px] grid-cols-[auto_minmax(0,1fr)] gap-x-3 md:gap-x-5 md:pr-[64px]"
-    >
-      <span class="flex min-w-0 items-center gap-2 pt-1 md:items-start">
-        <b
-          class="shrink-0 select-none font-mono text-[15px] font-semibold leading-7 tracking-[-.02em] text-[#12327f]"
-          >{{ exam.year }}.{{ exam.number }}</b
+      <div v-if="currentExam.options.length" class="mt-7">
+        <button
+          v-for="option in currentExam.options"
+          :key="option.key"
+          type="button"
+          class="exam-option"
+          :data-state="optionState(option.key)"
+          :disabled="!!result"
+          :aria-pressed="selectedAnswer === option.key"
+          @click="selectedAnswer = option.key"
         >
-      </span>
-
-      <div class="min-w-0">
-        <section aria-label="题干">
-          <ExamMarkdown :source="currentExam.stem" />
-        </section>
-
-        <div v-if="currentExam.options.length" class="mt-7">
-          <button
-            v-for="option in currentExam.options"
-            :key="option.key"
-            type="button"
-            class="exam-option"
-            :data-state="optionState(option.key)"
-            :disabled="!!result"
-            :aria-pressed="selectedAnswer === option.key"
-            @click="selectedAnswer = option.key"
+          <span class="option-key" aria-hidden="true">{{ option.key }}</span>
+          <span class="option-content"
+            ><ExamMarkdown inline :source="option.text"
+          /></span>
+          <span
+            class="option-status"
+            :aria-label="optionStatus(option.key)?.label"
           >
-            <span class="option-key" aria-hidden="true">{{ option.key }}</span>
-            <span class="option-content"
-              ><ExamMarkdown inline :source="option.text"
-            /></span>
-            <span
-              class="option-status"
-              :aria-label="optionStatus(option.key)?.label"
-            >
-              <template v-if="optionStatus(option.key)">
-                <span class="status-symbol" aria-hidden="true">{{
-                  optionStatus(option.key)!.symbol
-                }}</span>
-                <span class="status-label">{{
-                  optionStatus(option.key)!.label
-                }}</span>
-              </template>
-            </span>
-          </button>
-        </div>
+            <template v-if="optionStatus(option.key)">
+              <span class="status-symbol" aria-hidden="true">{{
+                optionStatus(option.key)!.symbol
+              }}</span>
+              <span class="status-label">{{
+                optionStatus(option.key)!.label
+              }}</span>
+            </template>
+          </span>
+        </button>
+      </div>
 
-        <p
-          v-if="error"
-          class="mt-5 border-l-2 border-red-300 bg-red-50/70 px-4 py-3 text-sm text-red-700"
-        >
-          {{ error }}
-        </p>
+      <p
+        v-if="error"
+        class="mt-5 border-l-2 border-red-300 bg-red-50/70 px-4 py-3 text-sm text-red-700"
+      >
+        {{ error }}
+      </p>
 
-        <!-- 原位展开的答案与解析 -->
-        <div
-          class="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-          :class="
-            solutionExpanded && result
-              ? 'grid-rows-[1fr] opacity-100'
-              : 'grid-rows-[0fr] opacity-0'
-          "
-        >
-          <div class="overflow-hidden">
-            <section
-              class="relative my-7 border-l-[3px] border-[#8ea7d0] bg-[#f6f8fb] px-[clamp(18px,3vw,30px)] py-6"
-            >
-              <div class="mb-5 flex flex-wrap items-center gap-4 text-sm">
-                <b
-                  v-if="
-                    currentExam.questionType === 'choice' && result?.submitted
-                  "
-                  :class="
-                    result?.correct ? 'text-emerald-700' : 'text-orange-700'
-                  "
-                  >{{ result?.correct ? "回答正确" : "答案不一致" }}</b
-                >
-                <span class="text-slate-700"
-                  ><b class="font-semibold text-[#071225]">标准答案：</b
-                  >{{ result?.answer || "见解析" }}</span
-                >
-              </div>
-              <div class="text-slate-700">
-                <ExamMarkdown :source="result?.explanation || ''" />
-              </div>
-
-              <!-- 卡片化入口（右上角） -->
-              <button
-                type="button"
-                class="flip-entry absolute right-4 top-4"
-                title="将题目和答案制成正反面复习卡，点击后鼠标移动到题目上可查看答案"
-                aria-label="将题目和答案制成正反面复习卡，点击后鼠标移动到题目上可查看答案"
-                @click="enterCardMode"
+      <!-- 原位展开的答案与解析 -->
+      <div
+        class="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+        :class="
+          solutionExpanded && result
+            ? 'grid-rows-[1fr] opacity-100'
+            : 'grid-rows-[0fr] opacity-0'
+        "
+      >
+        <div class="overflow-hidden">
+          <section
+            class="relative my-7 border-l-[3px] border-[#8ea7d0] bg-[#f6f8fb] px-[clamp(18px,3vw,30px)] py-6"
+          >
+            <div class="mb-5 flex flex-wrap items-center gap-4 text-sm">
+              <b
+                v-if="
+                  currentExam.questionType === 'choice' && result?.submitted
+                "
+                :class="
+                  result?.correct ? 'text-emerald-700' : 'text-orange-700'
+                "
+                >{{ result?.correct ? "回答正确" : "答案不一致" }}</b
               >
-                <svg
-                  class="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  aria-hidden="true"
-                >
-                  <rect x="3" y="5" width="12" height="10" rx="1.5" />
-                  <rect
-                    x="5"
-                    y="3"
-                    width="12"
-                    height="10"
-                    rx="1.5"
-                    fill="#fff"
-                  />
-                  <path d="M5 3h12a1 1 0 0 1 1 1v10" />
-                </svg>
-                卡片化答案
-              </button>
-            </section>
-          </div>
+              <span class="text-slate-700"
+                ><b class="font-semibold text-[#071225]">标准答案：</b
+                >{{ result?.answer || "见解析" }}</span
+              >
+            </div>
+            <div class="text-slate-700">
+              <ExamMarkdown :source="result?.explanation || ''" />
+            </div>
+
+            <!-- 卡片化入口（右上角） -->
+            <button
+              type="button"
+              class="flip-entry absolute right-4 top-4"
+              title="将题目和答案制成正反面复习卡，点击后鼠标移动到题目上可查看答案"
+              aria-label="将题目和答案制成正反面复习卡，点击后鼠标移动到题目上可查看答案"
+              @click="enterCardMode"
+            >
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                aria-hidden="true"
+              >
+                <rect x="3" y="5" width="12" height="10" rx="1.5" />
+                <rect
+                  x="5"
+                  y="3"
+                  width="12"
+                  height="10"
+                  rx="1.5"
+                  fill="#fff"
+                />
+                <path d="M5 3h12a1 1 0 0 1 1 1v10" />
+              </svg>
+              卡片化答案
+            </button>
+          </section>
         </div>
       </div>
     </div>
