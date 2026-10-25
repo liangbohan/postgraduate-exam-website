@@ -26,6 +26,7 @@ npm run build              # 校验 + 构建
 npm run validate:content   # 只校验知识树与文章注册
 npm run validate:exams     # 只校验真题数据
 npm run rebuild:exams      # 重新汇总真题 manifest / index
+npm run export:knowledge   # 导出知识内容 JSON 出口（public/knowledge/）
 npm run build:search-index # 重新生成搜索索引
 ```
 
@@ -40,6 +41,7 @@ postgraduate-exam-website/
 ├── package.json                  # workspaces 根，编排脚本
 ├── scripts/                      # 构建期脚本（Node）
 │   ├── rebuild-exam-index.mjs    #   真题 manifest/index 生成
+│   ├── export-knowledge-json.mjs #   知识内容 JSON 出口（public/knowledge/）
 │   ├── build-search-index.cjs    #   搜索索引生成
 │   ├── validate_knowledge_content.mjs
 │   └── validate_exam_content.mjs
@@ -81,6 +83,10 @@ postgraduate-exam-website/
         └── styles/
     └── public/
         ├── exams/<year>/paper.json     # 真题静态题库
+        ├── knowledge/                  # 知识内容 JSON 出口（构建期生成，勿跟踪）
+        │   ├── index.json              #   各书清单（sha256/统计）
+        │   ├── <bookId>.json           #   单本书完整知识树 + 正文
+        │   └── assets/<bookId>/        #   image 块引用的图片资源
         └── search/
             └── synonyms.json            # 同义词表
     # 注：408-terms.txt 唯一数据源在 client/src/search/408-terms.txt，
@@ -119,6 +125,7 @@ Book
 | 调整知识树结构（章节顺序、层级） | `client/src/content/knowledge-tree.ts` |
 | 新增 manim 动画 | `client/src/animations/<book>/<chapter>/*.ts` |
 | 加 / 改真题 | `client/public/exams/<year>/paper.json`（改完跑 `npm run rebuild:exams`） |
+| 外部工具拉取知识内容 | 读 `client/public/knowledge/`（JSON 出口，由 `npm run export:knowledge` 生成） |
 | 改搜索算法 / 评分 | `client/src/search/composables/searchKnowledge.ts` |
 | 扩 408 专业词典 | `client/public/search/408-terms.txt`（一行一词） |
 | 改同义词 | `client/public/search/synonyms.json` |
@@ -164,3 +171,8 @@ synonyms.json ───┘
 ```
 
 新增 / 修改内容后，`npm run dev` 与 `npm run build` 会自动重建索引；单独跑可以用 `npm run rebuild:exams` 或 `npm run build:search-index`。
+
+另有面向外部学习工具（如 phrontis）的知识内容 JSON 出口：`npm run export:knowledge` 生成 `client/public/knowledge/`（index.json 清单 + 每本书的完整知识树与正文），随 `npm run dev` / `npm run build` 自动刷新。深链接规则：
+
+- `/#/knowledge/<bookId>?point=<pointId>`：直达知识点（自动反查所在 section 并滚动定位）
+- `/#/knowledge/<bookId>/<sectionId>?block=<kb-*>`：直达具体内容块

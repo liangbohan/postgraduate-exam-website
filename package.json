@@ -13,10 +13,11 @@
   "keywords": ["408", "kaoyan", "考研", "计算机", "csapp", "datastructure", "os", "computer-network"],
   "workspaces": ["client"],
   "scripts": {
-    "dev": "npm run rebuild:exams && node scripts/build-search-index.cjs && npm run dev -w client",
-    "build": "npm run rebuild:exams && npm run validate && node scripts/build-search-index.cjs && npm run build -w client",
+    "dev": "npm run rebuild:exams && npm run export:knowledge && node scripts/build-search-index.cjs && npm run dev -w client",
+    "build": "npm run rebuild:exams && npm run export:knowledge && npm run validate && node scripts/build-search-index.cjs && npm run build -w client",
     "build:search-index": "node scripts/build-search-index.cjs",
     "rebuild:exams": "node scripts/rebuild-exam-index.mjs",
+    "export:knowledge": "node scripts/export-knowledge-json.mjs",
     "validate": "npm run validate:content && npm run validate:exams",
     "validate:content": "node scripts/validate_knowledge_content.mjs",
     "validate:exams": "node scripts/validate_exam_content.mjs",

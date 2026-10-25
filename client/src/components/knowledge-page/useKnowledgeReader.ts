@@ -41,6 +41,7 @@ export function useKnowledgeReader() {
     String(route.params.bookId || books[0]?.id || "computer-network"),
   );
   const requestedBlock = computed(() => String(route.query.block || ""));
+  const requestedPoint = computed(() => String(route.query.point || ""));
   const tocEntries = computed(() =>
     articleEntries.value.map((entry) => ({
       id: entry.point.id,
@@ -93,9 +94,7 @@ export function useKnowledgeReader() {
     if (target) selectSection(target.id);
   }
 
-  function scrollToRequestedBlock(retry = 0) {
-    const id = requestedBlock.value;
-    if (!id) return;
+  function scrollToElement(id: string, retry = 0) {
     const element = document.getElementById(id);
     if (element) {
       const top =
@@ -104,8 +103,19 @@ export function useKnowledgeReader() {
         window.innerHeight / 2;
       document.documentElement.scrollTop = Math.max(0, top);
     } else if (retry < 5) {
-      setTimeout(() => scrollToRequestedBlock(retry + 1), 100);
+      setTimeout(() => scrollToElement(id, retry + 1), 100);
     }
+  }
+
+  function scrollToRequestedBlock(retry = 0) {
+    const id = requestedBlock.value;
+    if (id) scrollToElement(id, retry);
+  }
+
+  /** 知识点级锚点（?point=）：正文容器 id 为 article-<pointId> */
+  function scrollToRequestedPoint(retry = 0) {
+    const id = requestedPoint.value;
+    if (id) scrollToElement(`article-${id}`, retry);
   }
 
   async function loadSection(id: string) {
@@ -174,7 +184,14 @@ export function useKnowledgeReader() {
     } finally {
       loading.value = false;
       await nextTick();
-      scrollToRequestedBlock();
+      const pointInThisSection =
+        requestedPoint.value &&
+        section.value?.points.some((point) => point.id === requestedPoint.value);
+      if (requestedBlock.value) {
+        scrollToRequestedBlock();
+      } else if (pointInThisSection) {
+        scrollToRequestedPoint();
+      }
     }
   }
 
@@ -184,11 +201,17 @@ export function useKnowledgeReader() {
     try {
       book.value = await content.getBook(bookId.value);
       if (!routeContentId.value) {
-        const firstSection = book.value.chapters[0]?.sections[0];
+        // 支持 ?point= 直达：由 pointId 反查所在 section（找不到则回退第一章第一节）
+        const targetSection = requestedPoint.value
+          ? findSelectedSection(requestedPoint.value)
+          : undefined;
+        const firstSection =
+          targetSection ?? book.value.chapters[0]?.sections[0];
         if (firstSection) {
           await router.replace({
             name: "knowledge",
             params: { bookId: bookId.value, sectionId: firstSection.id },
+            query: route.query,
           });
         }
         return;
@@ -215,17 +238,41 @@ export function useKnowledgeReader() {
   }
 
   watch(loading, (isLoading) => {
-    if (!isLoading && section.value && requestedBlock.value) {
-      nextTick().then(() => scrollToRequestedBlock(0));
+    if (!isLoading && section.value) {
+      if (requestedBlock.value) {
+        nextTick().then(() => scrollToRequestedBlock(0));
+      } else if (requestedPoint.value) {
+        nextTick().then(() => scrollToRequestedPoint(0));
+      }
     }
   });
   watch(requestedBlock, () => {
     if (!section.value || loading.value) return;
     nextTick().then(() => scrollToRequestedBlock(0));
   });
+  watch(requestedPoint, () => {
+    if (!section.value || loading.value) return;
+    if (!section.value.points.some((point) => point.id === requestedPoint.value))
+      return;
+    nextTick().then(() => scrollToRequestedPoint(0));
+  });
   watch(bookId, () => void loadBook());
   watch(routeContentId, (id) => {
-    if (!id || !book.value || book.value.id !== bookId.value) return;
+    if (!book.value || book.value.id !== bookId.value) return;
+    if (!id) {
+      // SPA 内导航到无 sectionId 的地址：支持 ?point= 反查所在 section
+      const targetSection = requestedPoint.value
+        ? findSelectedSection(requestedPoint.value)
+        : undefined;
+      if (targetSection) {
+        void router.replace({
+          name: "knowledge",
+          params: { bookId: bookId.value, sectionId: targetSection.id },
+          query: route.query,
+        });
+      }
+      return;
+    }
     void loadSection(id);
   });
   onMounted(() => void loadBook());

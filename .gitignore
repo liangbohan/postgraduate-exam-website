@@ -18,6 +18,9 @@ client/public/search/minisearch-fragment-index.json
 client/public/exams/index.json
 client/public/exams/manifest.json
 
+# 知识内容 JSON 出口（由 scripts/export-knowledge-json.mjs 生成，勿跟踪）
+client/public/knowledge/
+
 # 环境变量
 .env
 .env.local
